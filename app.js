@@ -14,7 +14,7 @@ let state = {
     psAh: parseFloat(localStorage.getItem('vibe_ps_ah')) || 0, 
     panelWp: parseFloat(localStorage.getItem('vibe_panel_wp')) || 0,
     panelPsWp: parseFloat(localStorage.getItem('vibe_panel_ps_wp')) || 0, 
-    weatherData: null
+    weatherData: null,
     panelTilt: parseFloat(localStorage.getItem('vibe_panel_tilt')) || 0,
 };
 
@@ -169,8 +169,8 @@ async function updateAll(isManualTime = false) {
         const sunH = SolarEngine.timeToDecimal(sunrise);
         const setH = SolarEngine.timeToDecimal(sunset);
 
-        const pServ = SolarEngine.calculatePower(hDec, sunH, setH, state.panelWp, hourly.cloud_cover[hourIdx]);
-        const pPS = SolarEngine.calculatePower(hDec, sunH, setH, state.panelPsWp, hourly.cloud_cover[hourIdx]);
+        const pServ = SolarEngine.calculatePower(hDec, sunH, setH, state.panelWp, hourly.cloud_cover[hourIdx], state.panelTilt);
+        const pPS = SolarEngine.calculatePower(hDec, sunH, setH, state.panelPsWp, hourly.cloud_cover[hourIdx], state.panelTilt);
         
         document.getElementById('w_out').innerText = Math.round(pServ + pPS) + " W";
         if (document.getElementById('w_services')) document.getElementById('w_services').innerText = Math.round(pServ) + " W";
@@ -244,7 +244,7 @@ function updateReportUI(totalPower, sunH, setH) {
     for (let h = startH; h <= endH; h++) {
         // Calcoliamo la produzione per ogni ora
         const cloud = state.weatherData.hourly.cloud_cover[h] || 0;
-        const hP = SolarEngine.calculatePower(h, sunH, setH, state.panelWp + state.panelPsWp, cloud);
+        const hP = SolarEngine.calculatePower(h, sunH, setH, state.panelWp + state.panelPsWp, cloud, state.panelTilt);
         dailyTotal += hP;
 
         const bar = document.createElement('div');
