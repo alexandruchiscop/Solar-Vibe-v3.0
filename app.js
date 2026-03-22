@@ -15,6 +15,7 @@ let state = {
     panelWp: parseFloat(localStorage.getItem('vibe_panel_wp')) || 0,
     panelPsWp: parseFloat(localStorage.getItem('vibe_panel_ps_wp')) || 0, 
     weatherData: null
+    panelTilt: parseFloat(localStorage.getItem('vibe_panel_tilt')) || 0,
 };
 
 window.onload = () => {
@@ -387,7 +388,9 @@ function switchView(vId, el) {
 }
 
 function initSliders() {
-    [{ id: 'ps-soc-slider', valId: 'ps-soc-val', stateKey: 'currentPsSOC' }, { id: 'soc-slider', valId: 'soc-val', stateKey: 'currentSOC' }].forEach(s => {
+    // 1. Configurazione slider Batterie (Servizi e PS)
+    [{ id: 'ps-soc-slider', valId: 'ps-soc-val', stateKey: 'currentPsSOC' }, 
+     { id: 'soc-slider', valId: 'soc-val', stateKey: 'currentSOC' }].forEach(s => {
         const el = document.getElementById(s.id);
         if (el) {
             el.addEventListener('input', (e) => {
@@ -399,4 +402,23 @@ function initSliders() {
             el.style.setProperty('--value', el.value + '%');
         }
     });
+
+    // 2. Configurazione slider TILT (Fuori dal ciclo sopra)
+    const tiltSlider = document.getElementById('tilt-slider');
+    const tiltDisplay = document.getElementById('tilt-val');
+
+    if (tiltSlider) {
+        // Applica valore iniziale
+        tiltSlider.value = state.panelTilt || 0;
+        tiltDisplay.innerText = state.panelTilt || 0;
+
+        tiltSlider.addEventListener('input', (e) => {
+            const val = e.target.value;
+            tiltDisplay.innerText = val;
+            state.panelTilt = parseInt(val);
+            localStorage.setItem('vibe_panel_tilt', val);
+            
+            if (typeof updateAll === 'function') updateAll(); 
+        });
+    }
 }
