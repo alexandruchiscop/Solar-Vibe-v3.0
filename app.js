@@ -230,7 +230,6 @@ function updateReportUI(totalPower, sunH, setH) {
         };
         chart.appendChild(bar);
     }
-
     if (totalDisplay) totalDisplay.innerText = Math.round(dailyTotal) + " Wh";
 }
 
@@ -288,4 +287,125 @@ function updateConversions() {
     const pWh = parseFloat(document.getElementById('ps_val').innerText) || 0;
     const pConvVal = document.getElementById('ps_conv_val');
     if (pConvVal) pConvVal.innerText = Math.round(pWh / 12.8);
+}
+
+function generaBottoniGiorni() {
+    const container = document.getElementById('days-selector');
+    if (!container) return;
+    container.innerHTML = "";
+    const oggi = new Date();
+    for (let i = 0; i < 7; i++) {
+        const d = new Date(oggi);
+        d.setDate(oggi.getDate() + i);
+        const btn = document.createElement('div');
+        btn.className = 'day-btn' + (d.toDateString() === dataSelezionata.toDateString() ? ' active' : '');
+        btn.innerHTML = `<span>${d.toLocaleDateString('it-IT', {weekday:'short'}).charAt(0).toUpperCase()}</span><b>${d.getDate()}</b>`;
+        btn.onclick = () => { dataSelezionata = new Date(d); aggiornaTuttaInterfaccia(); };
+        container.appendChild(btn);
+    }
+}
+
+function aggiornaTuttaInterfaccia(isManual = true) {
+    const inputDate = document.getElementById('input-date');
+    if (inputDate) inputDate.value = dataSelezionata.toISOString().split('T')[0];
+    generaBottoniGiorni();
+    updateAll(isManual);
+}
+
+async function updateCityName(lat, lng) {
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=it`);
+        const data = await response.json();
+        const city = data.address.city || data.address.town || data.address.village || "POSIZIONE";
+        const el = document.getElementById('city-input');
+        if (el) el.value = city.toUpperCase();
+    } catch (e) {}
+}
+
+async function searchCityCoords(cityName) {
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cityName)}&limit=1`);
+        const data = await response.json();
+        if (data?.[0]) {
+            document.getElementById('input-lat').value = parseFloat(data[0].lat).toFixed(4);
+            document.getElementById('input-lng').value = parseFloat(data[0].lon).toFixed(4);
+            updateAll();
+        }
+    } catch (e) {}
+}
+
+function setupStars() {
+    const container = document.getElementById('stars-container');
+    if (!container) return;
+    container.innerHTML = "";
+    for (let i = 0; i < 50; i++) {
+        const star = document.createElement('div');
+        star.className = 'star';
+        star.style.left = Math.random() * 100 + '%';
+        star.style.top = Math.random() * 60 + '%';
+        star.style.width = star.style.height = Math.random() * 2 + 'px';
+        container.appendChild(star);
+    }
+}
+
+function updateSunUI(hDec, sunH, setH) {
+    const sun = document.getElementById('sun-body');
+    const sky = document.getElementById('sky-box');
+    if (!sun || !sky) return;
+    if (hDec < sunH || hDec > setH) {
+        sun.style.display = "none";
+        sky.style.background = "linear-gradient(to bottom, #0f172a, #1e293b)";
+    } else {
+        sun.style.display = "block";
+        const progress = (hDec - sunH) / (setH - sunH);
+        sun.style.left = `${15 + (progress * 70)}%`;
+        sun.style.bottom = `${(Math.sin(progress * Math.PI) * 35) + 10}%`;
+        sky.style.background = (progress < 0.2 || progress > 0.8) ? "linear-gradient(to bottom, #f59e0b, #7c2d12)" : "linear-gradient(to bottom, #38bdf8, #1d4ed8)";
+    }
+}
+
+function changeBg(color) {
+    document.body.classList.remove('tema-verde', 'tema-rosso', 'tema-grigio');
+    if (color === '#062c1f') document.body.classList.add('tema-verde');
+    else if (color === '#2d0a1a') document.body.classList.add('tema-rosso');
+    else if (color === '#1a1a1a') document.body.classList.add('tema-grigio');
+    document.body.style.backgroundColor = color;
+    localStorage.setItem('vibe_solar_bg_color', color);
+}
+
+function switchView(vId, el) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    const target = document.getElementById('view-' + vId);
+    if (target) target.classList.add('active');
+    if (el) el.classList.add('active');
+}
+
+function initSliders() {
+    [{ id: 'ps-soc-slider', valId: 'ps-soc-val', stateKey: 'currentPsSOC' }, 
+     { id: 'soc-slider', valId: 'soc-val', stateKey: 'currentSOC' }].forEach(s => {
+        const el = document.getElementById(s.id);
+        if (el) {
+            el.addEventListener('input', (e) => {
+                state[s.stateKey] = e.target.value;
+                document.getElementById(s.valId).innerText = e.target.value + "%";
+                el.style.setProperty('--value', e.target.value + '%');
+                updateAll();
+            });
+            el.style.setProperty('--value', el.value + '%');
+        }
+    });
+    const tiltSlider = document.getElementById('tilt-slider');
+    const tiltDisplay = document.getElementById('tilt-val');
+    if (tiltSlider) {
+        tiltSlider.value = state.panelTilt || 0;
+        if(tiltDisplay) tiltDisplay.innerText = state.panelTilt || 0;
+        tiltSlider.addEventListener('input', (e) => {
+            const val = e.target.value;
+            if(tiltDisplay) tiltDisplay.innerText = val;
+            state.panelTilt = parseInt(val);
+            localStorage.setItem('vibe_panel_tilt', val);
+            updateAll(); 
+        });
+    }
 }
