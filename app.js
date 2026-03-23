@@ -131,6 +131,7 @@ async function updateAll(isManualTime = false) {
 
     if (!lat || !lng) return;
 
+    // Se l'ora non è impostata, usa quella attuale
     if (!timeInput.value) {
         const now = new Date();
         timeInput.value = now.getHours().toString().padStart(2,'0') + ":" + now.getMinutes().toString().padStart(2,'0');
@@ -138,38 +139,50 @@ async function updateAll(isManualTime = false) {
 
     try {
         const dateStr = dataSelezionata.toISOString().split('T')[0];
+        // Chiamata all'API
         state.weatherData = await WeatherAPI.fetchForecast(lat, lng, dateStr, !isManualTime);
         
-        if (!state.weatherData) return;
+        if (!state.weatherData || !state.weatherData.hourly) {
+            console.error("Dati meteo mancanti");
+            return;
+        }
 
-        let time = timeInput.value;
-        const [ore, minuti] = time.split(':').map(Number);
+        const [ore, minuti] = timeInput.value.split(':').map(Number);
         const hourIdx = Math.min(ore, 23); 
         const hDec = ore + (minuti / 60);
 
         const hourly = state.weatherData.hourly;
         const daily = state.weatherData.daily;
 
+        // Recupero nubi con protezione (se undefined mette 0)
+        const cloudCover = (hourly.cloud_cover && hourly.cloud_cover[hourIdx] !== undefined) 
+                           ? hourly.cloud_cover[hourIdx] 
+                           : 0;
+
+        // Aggiorna UI Meteo
         document.getElementById('r-wind').innerText = Math.round(hourly.wind_speed_10m[hourIdx]) + " km/h";
         document.getElementById('r-hum').innerText = hourly.relative_humidity_2m[hourIdx] + "%";
         document.getElementById('r-temp').innerText = Math.round(hourly.temperature_2m[hourIdx]) + "°C";
-        document.getElementById('r-cloud-percent').innerText = hourly.cloud_cover[hourIdx] + "%";
+        document.getElementById('r-cloud-percent').innerText = cloudCover + "%";
 
         const sunrise = daily.sunrise[0].split('T')[1].substring(0, 5);
         const sunset = daily.sunset[0].split('T')[1].substring(0, 5);
         document.getElementById('sunrise-txt').innerText = sunrise;
         document.getElementById('sunset-txt').innerText = sunset;
-        document.getElementById('display-hour-center').innerText = time;
+        document.getElementById('display-hour-center').innerText = timeInput.value;
 
         const sunH = SolarEngine.timeToDecimal(sunrise);
         const setH = SolarEngine.timeToDecimal(sunset);
 
+        // Calcolo altezza sole per il grafico e la dashboard
         const progress = (hDec - sunH) / (setH - sunH);
-        const sunAltitude = Math.max(0, Math.sin(progress * Math.PI) * 65);
+        const sunAltitude = (hDec >= sunH && hDec <= setH) ? Math.sin(progress * Math.PI) * 65 : 0;
 
-        const pServ = SolarEngine.calculatePower(hDec, sunH, setH, state.panelWp, hourly.cloud_cover[hourIdx], state.panelTilt, sunAltitude);
-        const pPS = SolarEngine.calculatePower(hDec, sunH, setH, state.panelPsWp, hourly.cloud_cover[hourIdx], state.panelTilt, sunAltitude);
+        // CALCOLO POTENZA (Assicurati che state.panelWp e state.panelPsWp siano > 0 nel Garage)
+        const pServ = SolarEngine.calculatePower(hDec, sunH, setH, state.panelWp, cloudCover, state.panelTilt, sunAltitude);
+        const pPS = SolarEngine.calculatePower(hDec, sunH, setH, state.panelPsWp, cloudCover, state.panelTilt, sunAltitude);
         
+        // Output sui display
         document.getElementById('w_out').innerText = Math.round(pServ + pPS) + " W";
         if (document.getElementById('w_services')) document.getElementById('w_services').innerText = Math.round(pServ) + " W";
         if (document.getElementById('w_ps')) document.getElementById('w_ps').innerText = Math.round(pPS) + " W";
@@ -177,7 +190,9 @@ async function updateAll(isManualTime = false) {
         updateSunUI(hDec, sunH, setH);
         updateReportUI(pServ + pPS, sunH, setH);
 
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+        console.error("Errore durante l'aggiornamento:", e); 
+    }
 }
 
 function updateReportUI(totalPower, sunH, setH) {
