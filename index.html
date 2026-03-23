@@ -77,7 +77,22 @@
         <div id="days-selector" class="days-container"></div>
         <div class="scroll-hint">← trascina per vedere altri giorni →</div>
         <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:20px 0;">
-        
+       <div class="config-group" style="border: 1px solid rgba(56, 189, 248, 0.2); background: rgba(56, 189, 248, 0.03); margin: 20px 0 25px 0;">
+    <div class="group-header" style="background: rgba(56, 189, 248, 0.1); color: #38bdf8;">OTTIMIZZAZIONE INCLINAZIONE</div>
+    <div style="padding: 15px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <span style="font-size: 11px; color: #94a3b8; letter-spacing: 1px; font-weight: bold;">📐 ANGOLO PANNELLI (TILT)</span>
+            <div style="color: #38bdf8; font-weight: bold;">
+                <span id="tilt-val" style="font-size: 1.3rem;">0</span>°
+            </div>
+        </div>
+        <input type="range" id="tilt-slider" min="0" max="90" step="5" value="0" style="width: 100%; cursor: pointer; accent-color: #38bdf8;">
+        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.65rem; color: #64748b; text-transform: uppercase; font-weight: bold;">
+            <span>Piano (0°)</span>
+            <span>Verticale (90°)</span>
+        </div>
+    </div>
+</div>
         <h3 class="section-title">STATO CARICA</h3>
         <div class="dual-slider-container">
             
@@ -184,22 +199,7 @@
                 </div>
             </div>
 
-            <div class="config-group" style="border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03); margin-top: 15px;">
-                <div class="group-header">CONFIGURAZIONE ANGOLO PANNELLI</div>
-                <div style="padding: 15px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <span style="font-size: 11px; color: #94a3b8; letter-spacing: 1px; font-weight: bold;">📐 INCLINAZIONE (TILT)</span>
-                        <div style="color: #38bdf8; font-weight: bold;">
-                            <span id="tilt-val" style="font-size: 1.3rem;">0</span>°
-                        </div>
-                    </div>
-                    <input type="range" id="tilt-slider" min="0" max="90" step="5" value="0" style="width: 100%; cursor: pointer; accent-color: #38bdf8;">
-                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.65rem; color: #64748b; text-transform: uppercase; font-weight: bold;">
-                        <span>Piano (0°)</span>
-                        <span>Verticale (90°)</span>
-                    </div>
-                </div>
-            </div>
+            
 
             <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 20px 0;">
 
