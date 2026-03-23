@@ -408,49 +408,47 @@ function initSliders() {
      { id: 'soc-slider', valId: 'soc-val', stateKey: 'currentSOC' }].forEach(s => {
         const el = document.getElementById(s.id);
         if (el) {
-            // Inizializza il riempimento al caricamento
+            // Sincronizzazione iniziale del riempimento
             el.style.setProperty('--value', el.value + '%');
             
             el.addEventListener('input', (e) => {
                 const val = e.target.value;
                 state[s.stateKey] = val;
                 document.getElementById(s.valId).innerText = val + "%";
-                // Aggiorna il riempimento (usa la variabile CSS --value)
-                el.style.setProperty('--value', val + '%');
+                el.style.setProperty('--value', val + '%'); // Gestisce il fill CSS
                 updateAll();
             });
         }
     });
 
-    // 2. Gestione Tilt con Filling Bar Dinamica
+    // 2. Gestione Manuale Tilt con Filling Bar
     const tiltSlider = document.getElementById('tilt-slider');
     const tiltDisplay = document.getElementById('tilt-val');
-
-    // Funzione interna per aggiornare il riempimento della barra Tilt
+    
+    // Funzione per aggiornare il riempimento della barra (background-size)
     const updateTiltVisual = (val) => {
         const percent = (val / 90) * 100;
         tiltSlider.style.backgroundSize = percent + '% 100%';
     };
-    
+
     if (tiltSlider) {
-        // Valore iniziale
+        // Ripristino valori iniziali
         const savedTilt = state.panelTilt || 0;
         tiltSlider.value = savedTilt;
         if(tiltDisplay) tiltDisplay.innerText = savedTilt;
         updateTiltVisual(savedTilt);
         
-        // Evento Manuale
         tiltSlider.addEventListener('input', (e) => {
-            const val = parseInt(e.target.value);
+            const val = e.target.value;
             if(tiltDisplay) tiltDisplay.innerText = val;
-            state.panelTilt = val;
+            state.panelTilt = parseInt(val);
             localStorage.setItem('vibe_panel_tilt', val);
             
-            updateTiltVisual(val); // Aggiorna il colore del riempimento
+            updateTiltVisual(val); // Aggiorna il riempimento mentre trascini
             updateAll(); 
         });
 
-        // --- 3. LOGICA AUTO-TILT ---
+        // --- 3. LOGICA AUTO-TILT (Recuperata integralmente) ---
         const btnAuto = document.getElementById('btn-auto-tilt');
         const hintBox = document.getElementById('tilt-hint');
         const optimumVal = document.getElementById('optimum-tilt-val');
@@ -471,23 +469,27 @@ function initSliders() {
                 const sunrise = SolarEngine.timeToDecimal(sunriseTxt);
                 const sunset = SolarEngine.timeToDecimal(sunsetTxt);
                 
+                // Calcolo matematico originale per l'inclinazione perfetta
                 const progress = (hDec - sunrise) / (sunset - sunrise);
                 const sunAlt = (hDec >= sunrise && hDec <= sunset) ? Math.sin(progress * Math.PI) * 65 : 0;
 
+                // L'angolo del pannello deve essere il complementare dell'altezza del sole
                 let idealTilt = Math.max(0, Math.min(90, 90 - sunAlt));
-                idealTilt = Math.round(idealTilt / 5) * 5;
+                idealTilt = Math.round(idealTilt / 5) * 5; // Arrotondamento a step di 5 gradi
 
-                // Aggiorna slider, display e riempimento colore
+                // Aggiornamento UI e Stato
                 tiltSlider.value = idealTilt;
                 if(tiltDisplay) tiltDisplay.innerText = idealTilt;
                 state.panelTilt = idealTilt;
                 localStorage.setItem('vibe_panel_tilt', idealTilt);
                 
-                updateTiltVisual(idealTilt); // <--- AGGIORNA IL RIEMPIMENTO QUI
+                // Aggiorna anche il riempimento visivo colorato
+                updateTiltVisual(idealTilt);
 
                 if(hintBox) hintBox.style.display = "block";
                 if(optimumVal) optimumVal.innerText = idealTilt;
                 
+                // Feedback utente
                 btnAuto.innerText = "COPIATO! ✅";
                 setTimeout(() => { btnAuto.innerText = "AUTO ✨"; }, 1500);
 
