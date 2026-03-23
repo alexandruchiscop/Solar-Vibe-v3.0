@@ -403,38 +403,54 @@ function switchView(vId, el) {
 }
 
 function initSliders() {
-    // 1. Configurazione slider Batterie
+    // 1. Configurazione slider Batterie (SOC e PS SOC)
     [{ id: 'ps-soc-slider', valId: 'ps-soc-val', stateKey: 'currentPsSOC' }, 
      { id: 'soc-slider', valId: 'soc-val', stateKey: 'currentSOC' }].forEach(s => {
         const el = document.getElementById(s.id);
         if (el) {
+            // Inizializza il riempimento al caricamento
+            el.style.setProperty('--value', el.value + '%');
+            
             el.addEventListener('input', (e) => {
-                state[s.stateKey] = e.target.value;
-                document.getElementById(s.valId).innerText = e.target.value + "%";
-                el.style.setProperty('--value', e.target.value + '%');
+                const val = e.target.value;
+                state[s.stateKey] = val;
+                document.getElementById(s.valId).innerText = val + "%";
+                // Aggiorna il riempimento (usa la variabile CSS --value)
+                el.style.setProperty('--value', val + '%');
                 updateAll();
             });
-            el.style.setProperty('--value', el.value + '%');
         }
     });
 
-    // 2. Gestione Manuale Tilt
+    // 2. Gestione Tilt con Filling Bar Dinamica
     const tiltSlider = document.getElementById('tilt-slider');
     const tiltDisplay = document.getElementById('tilt-val');
+
+    // Funzione interna per aggiornare il riempimento della barra Tilt
+    const updateTiltVisual = (val) => {
+        const percent = (val / 90) * 100;
+        tiltSlider.style.backgroundSize = percent + '% 100%';
+    };
     
     if (tiltSlider) {
-        tiltSlider.value = state.panelTilt || 0;
-        if(tiltDisplay) tiltDisplay.innerText = state.panelTilt || 0;
+        // Valore iniziale
+        const savedTilt = state.panelTilt || 0;
+        tiltSlider.value = savedTilt;
+        if(tiltDisplay) tiltDisplay.innerText = savedTilt;
+        updateTiltVisual(savedTilt);
         
+        // Evento Manuale
         tiltSlider.addEventListener('input', (e) => {
-            const val = e.target.value;
+            const val = parseInt(e.target.value);
             if(tiltDisplay) tiltDisplay.innerText = val;
-            state.panelTilt = parseInt(val);
+            state.panelTilt = val;
             localStorage.setItem('vibe_panel_tilt', val);
+            
+            updateTiltVisual(val); // Aggiorna il colore del riempimento
             updateAll(); 
         });
 
-        // --- 3. LOGICA AUTO-TILT (Inserita qui dentro) ---
+        // --- 3. LOGICA AUTO-TILT ---
         const btnAuto = document.getElementById('btn-auto-tilt');
         const hintBox = document.getElementById('tilt-hint');
         const optimumVal = document.getElementById('optimum-tilt-val');
@@ -461,11 +477,13 @@ function initSliders() {
                 let idealTilt = Math.max(0, Math.min(90, 90 - sunAlt));
                 idealTilt = Math.round(idealTilt / 5) * 5;
 
-                // Aggiorna lo slider e lo stato
+                // Aggiorna slider, display e riempimento colore
                 tiltSlider.value = idealTilt;
                 if(tiltDisplay) tiltDisplay.innerText = idealTilt;
                 state.panelTilt = idealTilt;
                 localStorage.setItem('vibe_panel_tilt', idealTilt);
+                
+                updateTiltVisual(idealTilt); // <--- AGGIORNA IL RIEMPIMENTO QUI
 
                 if(hintBox) hintBox.style.display = "block";
                 if(optimumVal) optimumVal.innerText = idealTilt;
