@@ -140,20 +140,19 @@ async function updateAll(isManualTime = false) {
 
     try {
         const dateStr = dataSelezionata.toISOString().split('T')[0];
-        
-        // Passiamo il parametro all'API per decidere se aggiornare l'ora dell'input
         state.weatherData = await WeatherAPI.fetchForecast(lat, lng, dateStr, !isManualTime);
         
         if (!state.weatherData) return;
 
         let time = timeInput.value;
         const [ore, minuti] = time.split(':').map(Number);
-        const hourIdx = Math.min(ore, 23); // Sicurezza indice array
+        const hourIdx = Math.min(ore, 23); 
         const hDec = ore + (minuti / 60);
 
         const hourly = state.weatherData.hourly;
         const daily = state.weatherData.daily;
 
+        // Aggiornamento UI Meteo
         document.getElementById('r-wind').innerText = Math.round(hourly.wind_speed_10m[hourIdx]) + " km/h";
         document.getElementById('r-hum').innerText = hourly.relative_humidity_2m[hourIdx] + "%";
         document.getElementById('r-temp').innerText = Math.round(hourly.temperature_2m[hourIdx]) + "°C";
@@ -163,15 +162,22 @@ async function updateAll(isManualTime = false) {
         const sunset = daily.sunset[0].split('T')[1].substring(0, 5);
         document.getElementById('sunrise-txt').innerText = sunrise;
         document.getElementById('sunset-txt').innerText = sunset;
-        
         document.getElementById('display-hour-center').innerText = time;
 
         const sunH = SolarEngine.timeToDecimal(sunrise);
         const setH = SolarEngine.timeToDecimal(sunset);
 
-        const pServ = SolarEngine.calculatePower(hDec, sunH, setH, state.panelWp, hourly.cloud_cover[hourIdx], state.panelTilt);
-        const pPS = SolarEngine.calculatePower(hDec, sunH, setH, state.panelPsWp, hourly.cloud_cover[hourIdx], state.panelTilt);
+        // --- NUOVO CALCOLO ALTEZZA SOLE (FONDAMENTALE) ---
+        // Calcoliamo la posizione del sole (0 = alba, 1 = tramonto)
+        const progress = (hDec - sunH) / (setH - sunH);
+        // Simuliamo l'altezza solare: a metà giornata il seno è 1, quindi l'altezza è ~65 gradi
+        const sunAltitude = Math.max(0, Math.sin(progress * Math.PI) * 65);
+
+        // CHIAMATA AL MOTORE AGGIORNATA: aggiunto sunAltitude alla fine
+        const pServ = SolarEngine.calculatePower(hDec, sunH, setH, state.panelWp, hourly.cloud_cover[hourIdx], state.panelTilt, sunAltitude);
+        const pPS = SolarEngine.calculatePower(hDec, sunH, setH, state.panelPsWp, hourly.cloud_cover[hourIdx], state.panelTilt, sunAltitude);
         
+        // Aggiornamento Dashboard
         document.getElementById('w_out').innerText = Math.round(pServ + pPS) + " W";
         if (document.getElementById('w_services')) document.getElementById('w_services').innerText = Math.round(pServ) + " W";
         if (document.getElementById('w_ps')) document.getElementById('w_ps').innerText = Math.round(pPS) + " W";
