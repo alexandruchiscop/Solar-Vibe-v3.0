@@ -1,5 +1,5 @@
 /**
- * APP.JS - Versione Definitiva Corretta
+ * APP.JS - Versione Ripristinata (Search + GPS)
  */
 let chartSelectionTimer;
 let dataSelezionata = new Date(); 
@@ -63,72 +63,112 @@ function initEventListeners() {
         });
     }
 
-  // Quando l'utente preme INVIO nel box città
+    // --- GESTIONE INPUT CITTÀ ---
     const cityInput = document.getElementById('city-input');
     if (cityInput) {
         cityInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') searchCityCoords(cityInput.value.trim());
+            if (e.key === 'Enter') {
+                searchCityCoords(cityInput.value.trim());
+                cityInput.blur();
+            }
         });
-        // Opzionale: aggiorna anche quando esce dal campo
-        cityInput.addEventListener('blur', () => searchCityCoords(cityInput.value.trim()));
     }
 
-    // Quando l'utente cambia a mano Latitudine o Longitudine
+    // Quando cambi Lat/Lng a mano dai piccoli box
     ['input-lat', 'input-lng'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
             el.addEventListener('change', () => {
-                // Se cambio i numeri, devo aggiornare il NOME della città nel box
                 const lat = document.getElementById('input-lat').value;
                 const lng = document.getElementById('input-lng').value;
-                updateCityName(lat, lng); 
+                updateCityName(lat, lng); // Aggiorna il nome città basandosi sui nuovi numeri
                 updateAll(false);
             });
         }
     });
+
+    // Bottone salvataggio Garage
+    const saveBtn = document.getElementById('btn-save-name');
+    if (saveBtn) saveBtn.addEventListener('click', saveGarageSettings);
 }
+
 async function handleGpsSync() {
     isGpsSyncing = true;
     const btn = document.getElementById('btn-gps');
-    const timeInput = document.getElementById('input-time');
-    const dateInput = document.getElementById('input-date');
     const latInput = document.getElementById('input-lat');
     const lngInput = document.getElementById('input-lng');
 
-    if (!btn) return;
-    btn.disabled = true;
-    btn.innerText = "🛰️ RICERCA POSIZIONE...";
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = "🛰️ RICERCA POSIZIONE...";
+    }
 
     try {
         const coords = await WeatherAPI.getUserLocation();
-        const now = new Date();
-        
         if (latInput) latInput.value = coords.latitude.toFixed(4);
         if (lngInput) lngInput.value = coords.longitude.toFixed(4);
 
-        const oraStringa = now.getHours().toString().padStart(2,'0') + ":" + now.getMinutes().toString().padStart(2,'0');
-        if (timeInput) timeInput.value = oraStringa;
-
-        dataSelezionata = new Date();
-        if (dateInput) dateInput.value = dataSelezionata.toISOString().split('T')[0];
-
+        // Trova il nome della città dalle coordinate GPS
         await updateCityName(coords.latitude, coords.longitude);
         
-        generaBottoniGiorni();
         updateAll(false); 
 
-        btn.innerText = "✅ SINCRONIZZAZIONE RIUSCITA";
-        btn.style.background = "#22c55e"; 
+        if (btn) {
+            btn.innerText = "✅ POSIZIONE AGGIORNATA";
+            btn.style.background = "#22c55e"; 
+        }
     } catch (err) {
-        btn.innerText = "❌ ERRORE GPS";
+        if (btn) btn.innerText = "❌ ERRORE GPS";
     } finally {
-        btn.disabled = false;
         isGpsSyncing = false;
         setTimeout(() => { 
-            btn.innerText = "📡 AGGIORNA GPS E ORA ATTUALE"; 
-            btn.style.background = ""; 
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = "📡 AGGIORNA GPS E ORA ATTUALE"; 
+                btn.style.background = ""; 
+            }
         }, 2000);
     }
+}
+
+// CERCA COORDINATE PARTENDO DAL TESTO (es: "MILANO")
+async function searchCityCoords(query) {
+    if (!query || query.length < 3) return;
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+        const data = await response.json();
+        if (data && data.length > 0) {
+            document.getElementById('input-lat').value = parseFloat(data[0].lat).toFixed(4);
+            document.getElementById('input-lng').value = parseFloat(data[0].lon).toFixed(4);
+            
+            // Dopo aver trovato le coordinate, aggiorna il meteo
+            updateAll(false); 
+        } else {
+            alert("Città non trovata");
+        }
+    } catch (e) { console.error("Errore ricerca città:", e); }
+}
+
+// SCRIVE IL NOME DELLA CITTÀ PARTENDO DALLE COORDINATE
+async function updateCityName(lat, lng) {
+    if (!lat || !lng) return;
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=it`);
+        const data = await response.json();
+        const city = data.address.city || data.address.town || data.address.village || data.address.county || "";
+        const cityUpper = city.toUpperCase();
+
+        // Aggiorna l'input in basso
+        const cityInput = document.getElementById('city-input');
+        if (cityInput) cityInput.value = cityUpper;
+        
+        // Aggiorna il titolo principale (CAMPER - CITTÀ)
+        const mainDisplay = document.getElementById('camper-name-display');
+        if (mainDisplay) {
+            const baseName = state.camperName || "IL MIO CAMPER";
+            mainDisplay.innerText = `${baseName.toUpperCase()} - ${cityUpper}`;
+        }
+    } catch (e) { console.error(e); }
 }
 
 async function updateAll(isManualTime = false) {
@@ -138,27 +178,11 @@ async function updateAll(isManualTime = false) {
 
     if (!lat || !lng) return;
 
-    // --- NUOVA AGGIUNTA: Aggiorna il nome della città (PISA, ecc.) ---
-    // Lo facciamo solo se non stiamo già sincronizzando col GPS per evitare conflitti
-    if (!isGpsSyncing) {
-        updateCityName(lat, lng);
-    }
-
-    // Se l'ora non è impostata, usa quella attuale
-    if (!timeInput.value) {
-        const now = new Date();
-        timeInput.value = now.getHours().toString().padStart(2,'0') + ":" + now.getMinutes().toString().padStart(2,'0');
-    }
-
     try {
         const dateStr = dataSelezionata.toISOString().split('T')[0];
-        // Chiamata all'API meteo
         state.weatherData = await WeatherAPI.fetchForecast(lat, lng, dateStr, !isManualTime);
         
-        if (!state.weatherData || !state.weatherData.hourly) {
-            console.error("Dati meteo mancanti");
-            return;
-        }
+        if (!state.weatherData) return;
 
         const [ore, minuti] = timeInput.value.split(':').map(Number);
         const hourIdx = Math.min(ore, 23); 
@@ -166,13 +190,9 @@ async function updateAll(isManualTime = false) {
 
         const hourly = state.weatherData.hourly;
         const daily = state.weatherData.daily;
+        const cloudCover = hourly.cloud_cover[hourIdx] || 0;
 
-        // Recupero nubi
-        const cloudCover = (hourly.cloud_cover && hourly.cloud_cover[hourIdx] !== undefined) 
-                           ? hourly.cloud_cover[hourIdx] 
-                           : 0;
-
-        // Aggiorna UI Meteo
+        // UI Meteo
         document.getElementById('r-wind').innerText = Math.round(hourly.wind_speed_10m[hourIdx]) + " km/h";
         document.getElementById('r-hum').innerText = hourly.relative_humidity_2m[hourIdx] + "%";
         document.getElementById('r-temp').innerText = Math.round(hourly.temperature_2m[hourIdx]) + "°C";
@@ -187,15 +207,10 @@ async function updateAll(isManualTime = false) {
         const sunH = SolarEngine.timeToDecimal(sunrise);
         const setH = SolarEngine.timeToDecimal(sunset);
 
-        // Calcolo altezza sole
-        const progress = (hDec - sunH) / (setH - sunH);
-        const sunAltitude = (hDec >= sunH && hDec <= setH) ? Math.sin(progress * Math.PI) * 65 : 0;
-
-        // CALCOLO POTENZA
-        const pServ = SolarEngine.calculatePower(hDec, sunH, setH, state.panelWp, cloudCover, state.panelTilt, sunAltitude);
-        const pPS = SolarEngine.calculatePower(hDec, sunH, setH, state.panelPsWp, cloudCover, state.panelTilt, sunAltitude);
+        // Calcolo Watt
+        const pServ = SolarEngine.calculatePower(hDec, sunH, setH, state.panelWp, cloudCover, state.panelTilt);
+        const pPS = SolarEngine.calculatePower(hDec, sunH, setH, state.panelPsWp, cloudCover, state.panelTilt);
         
-        // Output sui display
         document.getElementById('w_out').innerText = Math.round(pServ + pPS) + " W";
         if (document.getElementById('w_services')) document.getElementById('w_services').innerText = Math.round(pServ) + " W";
         if (document.getElementById('w_ps')) document.getElementById('w_ps').innerText = Math.round(pPS) + " W";
@@ -203,12 +218,9 @@ async function updateAll(isManualTime = false) {
         updateSunUI(hDec, sunH, setH);
         updateReportUI(pServ + pPS, sunH, setH);
 
-    } catch (e) { 
-        console.error("Errore durante l'aggiornamento:", e); 
-    }
+    } catch (e) { console.error(e); }
 }
 
-function updateReportUI(totalPower, sunH, setH) {
     const chart = document.getElementById('hourly-chart');
     const totalDisplay = document.getElementById('total-wh-day');
     if (!chart || !state.weatherData) return;
@@ -515,21 +527,52 @@ function initSliders() {
     }
 }
 
+// 1. FUNZIONE PER CERCARE QUANDO SCRIVI TU
 async function searchCityCoords(query) {
     if (!query || query.length < 3) return;
     try {
         const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
         const data = await response.json();
-
         if (data && data.length > 0) {
-            // Aggiorna i campi numerici
+            // Aggiorna input lat/lng con i nuovi dati
             document.getElementById('input-lat').value = parseFloat(data[0].lat).toFixed(4);
             document.getElementById('input-lng').value = parseFloat(data[0].lon).toFixed(4);
-
-            // AGGIORNA TUTTO (Meteo, Sole, Grafici)
-            updateAll(false); 
+            
+            // Richiama l'aggiornamento totale della dashboard
+            if (typeof updateAll === 'function') updateAll(false); 
         }
-    } catch (e) {
-        console.error("Errore ricerca città:", e);
-    }
+    } catch (e) { console.error("Errore ricerca:", e); }
+}
+
+// 2. FUNZIONE PER MOSTRARE LA CITTÀ (DA GPS) SENZA BLOCCARE L'INPUT
+async function updateCityName(lat, lng) {
+    if (!lat || !lng) return;
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=it`);
+        const data = await response.json();
+        const city = data.address.city || data.address.town || data.address.village || data.address.county || "";
+        
+        const cityInput = document.getElementById('city-input');
+        if (cityInput) {
+            cityInput.value = city.toUpperCase(); // Scrive la città trovata
+        }
+        
+        // Aggiorna il titolo in alto (IL MIO CAMPER - PISA)
+        const mainDisplay = document.getElementById('camper-name-display');
+        if (mainDisplay) {
+            const baseName = state.camperName || "IL MIO CAMPER";
+            mainDisplay.innerText = `${baseName.toUpperCase()} - ${city.toUpperCase()}`;
+        }
+    } catch (e) { console.error(e); }
+}
+
+// 3. AGGIUNGI L'EVENTO "INVIO" (da mettere dentro window.onload o initEventListeners)
+const cityInput = document.getElementById('city-input');
+if (cityInput) {
+    cityInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            searchCityCoords(cityInput.value.trim());
+            cityInput.blur(); // Rimuove il cursore dopo l'invio
+        }
+    });
 }
