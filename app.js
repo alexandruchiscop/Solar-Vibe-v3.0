@@ -131,6 +131,12 @@ async function updateAll(isManualTime = false) {
 
     if (!lat || !lng) return;
 
+    // --- NUOVA AGGIUNTA: Aggiorna il nome della città (PISA, ecc.) ---
+    // Lo facciamo solo se non stiamo già sincronizzando col GPS per evitare conflitti
+    if (!isGpsSyncing) {
+        updateCityName(lat, lng);
+    }
+
     // Se l'ora non è impostata, usa quella attuale
     if (!timeInput.value) {
         const now = new Date();
@@ -139,7 +145,7 @@ async function updateAll(isManualTime = false) {
 
     try {
         const dateStr = dataSelezionata.toISOString().split('T')[0];
-        // Chiamata all'API
+        // Chiamata all'API meteo
         state.weatherData = await WeatherAPI.fetchForecast(lat, lng, dateStr, !isManualTime);
         
         if (!state.weatherData || !state.weatherData.hourly) {
@@ -154,7 +160,7 @@ async function updateAll(isManualTime = false) {
         const hourly = state.weatherData.hourly;
         const daily = state.weatherData.daily;
 
-        // Recupero nubi con protezione (se undefined mette 0)
+        // Recupero nubi
         const cloudCover = (hourly.cloud_cover && hourly.cloud_cover[hourIdx] !== undefined) 
                            ? hourly.cloud_cover[hourIdx] 
                            : 0;
@@ -174,11 +180,11 @@ async function updateAll(isManualTime = false) {
         const sunH = SolarEngine.timeToDecimal(sunrise);
         const setH = SolarEngine.timeToDecimal(sunset);
 
-        // Calcolo altezza sole per il grafico e la dashboard
+        // Calcolo altezza sole
         const progress = (hDec - sunH) / (setH - sunH);
         const sunAltitude = (hDec >= sunH && hDec <= setH) ? Math.sin(progress * Math.PI) * 65 : 0;
 
-        // CALCOLO POTENZA (Assicurati che state.panelWp e state.panelPsWp siano > 0 nel Garage)
+        // CALCOLO POTENZA
         const pServ = SolarEngine.calculatePower(hDec, sunH, setH, state.panelWp, cloudCover, state.panelTilt, sunAltitude);
         const pPS = SolarEngine.calculatePower(hDec, sunH, setH, state.panelPsWp, cloudCover, state.panelTilt, sunAltitude);
         
