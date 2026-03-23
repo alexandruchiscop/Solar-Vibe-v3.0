@@ -496,3 +496,28 @@ function initSliders() {
         }
     }
 }
+
+/**
+ * Cerca le coordinate partendo dal testo inserito dall'utente (es. "Milano")
+ */
+async function searchCityCoords(query) {
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+        const data = await response.json();
+
+        if (data && data.length > 0) {
+            const latInput = document.getElementById('input-lat');
+            const lngInput = document.getElementById('input-lng');
+
+            if (latInput) latInput.value = parseFloat(data[0].lat).toFixed(4);
+            if (lngInput) lngInput.value = parseFloat(data[0].lon).toFixed(4);
+
+            // Una volta trovate le coordinate, aggiorniamo tutto il sistema
+            updateAll(false);
+        } else {
+            console.warn("Città non trovata");
+        }
+    } catch (e) {
+        console.error("Errore durante la ricerca città:", e);
+    }
+}
