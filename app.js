@@ -341,22 +341,33 @@ function aggiornaTuttaInterfaccia(isManual = true) {
 }
 
 async function updateCityName(lat, lng) {
+    if (!lat || !lng) return;
     try {
         const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=it`);
         const data = await response.json();
-        const city = data.address.city || data.address.town || data.address.village || "POSIZIONE";
         
-        // 1. Aggiorna il box di ricerca (quello che hai già)
-        const el = document.getElementById('city-input');
-        if (el) el.value = city.toUpperCase();
+        // Recupera il nome (città, comune o villaggio)
+        const city = data.address.city || data.address.town || data.address.village || data.address.county || "Posizione Sconosciuta";
+        const cityUpper = city.toUpperCase();
 
-        // 2. AGGIUNTA: Aggiorna il display grande (es. "ORSO VAN DI ALEX - PISA")
+        // Aggiorna l'input di ricerca città
+        const cityInput = document.getElementById('city-input');
+        if (cityInput) cityInput.value = cityUpper;
+
+        // Aggiorna il display in basso (dove c'è scritto PISA nell'allegato)
+        // Assicurati che nel tuo HTML l'id sia 'location-display' o quello che usavi
+        const locDisplay = document.getElementById('location-display'); 
+        if (locDisplay) {
+            locDisplay.innerText = cityUpper;
+        }
+
+        // Se vuoi che appaia anche nel titolo principale insieme al nome camper:
         const mainDisplay = document.getElementById('camper-name-display');
         if (mainDisplay && state.camperName) {
-            mainDisplay.innerText = `${state.camperName.toUpperCase()} - ${city.toUpperCase()}`;
+            mainDisplay.innerText = `${state.camperName.toUpperCase()} - ${cityUpper}`;
         }
     } catch (e) {
-        console.error("Errore geocoding:", e);
+        console.error("Errore nel recupero del nome città:", e);
     }
 }
 
