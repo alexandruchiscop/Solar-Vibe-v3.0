@@ -338,21 +338,19 @@ async function updateCityName(lat, lng) {
         const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=it`);
         const data = await response.json();
         const city = data.address.city || data.address.town || data.address.village || "POSIZIONE";
+        
+        // 1. Aggiorna il box di ricerca (quello che hai già)
         const el = document.getElementById('city-input');
         if (el) el.value = city.toUpperCase();
-    } catch (e) {}
-}
 
-async function searchCityCoords(cityName) {
-    try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cityName)}&limit=1`);
-        const data = await response.json();
-        if (data?.[0]) {
-            document.getElementById('input-lat').value = parseFloat(data[0].lat).toFixed(4);
-            document.getElementById('input-lng').value = parseFloat(data[0].lon).toFixed(4);
-            updateAll();
+        // 2. AGGIUNTA: Aggiorna il display grande (es. "ORSO VAN DI ALEX - PISA")
+        const mainDisplay = document.getElementById('camper-name-display');
+        if (mainDisplay && state.camperName) {
+            mainDisplay.innerText = `${state.camperName.toUpperCase()} - ${city.toUpperCase()}`;
         }
-    } catch (e) {}
+    } catch (e) {
+        console.error("Errore geocoding:", e);
+    }
 }
 
 function setupStars() {
