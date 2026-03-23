@@ -239,18 +239,24 @@ function updateReportUI(totalPower, sunH, setH) {
     safeSet('ps_charge_90_txt', SolarEngine.estimateChargeTime(state.currentPsSOC, 90, wPS, psAhEquiv));
     safeSet('ps_charge_100_txt', SolarEngine.estimateChargeTime(state.currentPsSOC, 100, wPS, psAhEquiv));
 
-    // 3. DISEGNO GRAFICO (Solo ore di luce)
+   // 3. DISEGNO GRAFICO (Solo ore di luce)
     chart.innerHTML = "";
     let dailyTotal = 0;
     
-    // Arrotondiamo l'alba per difetto e il tramonto per eccesso per includere le mezze ore
     const startH = Math.floor(sunH);
     const endH = Math.ceil(setH);
 
     for (let h = startH; h <= endH; h++) {
-        // Calcoliamo la produzione per ogni ora
+        // --- CALCOLO ALTEZZA SOLE PER QUESTA ORA SPECIFICA ---
+        const hProgress = (h - sunH) / (setH - sunH);
+        const hAltitude = Math.max(0, Math.sin(hProgress * Math.PI) * 65);
+
+        // Recuperiamo le nubi per l'ora 'h'
         const cloud = state.weatherData.hourly.cloud_cover[h] || 0;
-        const hP = SolarEngine.calculatePower(h, sunH, setH, state.panelWp + state.panelPsWp, cloud, state.panelTilt);
+
+        // CHIAMATA AGGIORNATA: aggiungiamo hAltitude come ultimo parametro
+        const hP = SolarEngine.calculatePower(h, sunH, setH, state.panelWp + state.panelPsWp, cloud, state.panelTilt, hAltitude);
+        
         dailyTotal += hP;
 
         const bar = document.createElement('div');
@@ -259,11 +265,11 @@ function updateReportUI(totalPower, sunH, setH) {
         const maxPotenza = (state.panelWp + state.panelPsWp) || 1;
         bar.style.height = Math.max(5, (hP / maxPotenza * 100)) + "%";
         
-        // Evidenzia l'ora selezionata se rientra nel range visualizzato
+        // Evidenzia l'ora selezionata
         const timeInput = document.getElementById('input-time');
         if (timeInput && timeInput.value) {
             const currentH = parseInt(timeInput.value.split(':')[0]);
-            if (h === currentH) bar.style.background = "var(--accent, #fbbf24)";
+            if (h === currentH) bar.style.background = "var(--accento, #fbbf24)";
         }
 
         bar.onclick = () => {
@@ -273,6 +279,8 @@ function updateReportUI(totalPower, sunH, setH) {
         chart.appendChild(bar);
     }
 
+    if (totalDisplay) totalDisplay.innerText = Math.round(dailyTotal) + " Wh";
+}
     if (totalDisplay) totalDisplay.innerText = Math.round(dailyTotal) + " Wh";
 }function saveGarageSettings() {
     const name = document.getElementById('camper_name_input').value.trim();
