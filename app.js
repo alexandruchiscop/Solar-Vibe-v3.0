@@ -397,6 +397,7 @@ function switchView(vId, el) {
 }
 
 function initSliders() {
+    // 1. Configurazione slider Batterie
     [{ id: 'ps-soc-slider', valId: 'ps-soc-val', stateKey: 'currentPsSOC' }, 
      { id: 'soc-slider', valId: 'soc-val', stateKey: 'currentSOC' }].forEach(s => {
         const el = document.getElementById(s.id);
@@ -410,11 +411,15 @@ function initSliders() {
             el.style.setProperty('--value', el.value + '%');
         }
     });
+
+    // 2. Gestione Manuale Tilt
     const tiltSlider = document.getElementById('tilt-slider');
     const tiltDisplay = document.getElementById('tilt-val');
+    
     if (tiltSlider) {
         tiltSlider.value = state.panelTilt || 0;
         if(tiltDisplay) tiltDisplay.innerText = state.panelTilt || 0;
+        
         tiltSlider.addEventListener('input', (e) => {
             const val = e.target.value;
             if(tiltDisplay) tiltDisplay.innerText = val;
@@ -422,5 +427,48 @@ function initSliders() {
             localStorage.setItem('vibe_panel_tilt', val);
             updateAll(); 
         });
+
+        // --- 3. LOGICA AUTO-TILT (Inserita qui dentro) ---
+        const btnAuto = document.getElementById('btn-auto-tilt');
+        const hintBox = document.getElementById('tilt-hint');
+        const optimumVal = document.getElementById('optimum-tilt-val');
+
+        if (btnAuto) {
+            btnAuto.addEventListener('click', () => {
+                const timeInput = document.getElementById('input-time');
+                if (!timeInput.value) return;
+
+                const [h, m] = timeInput.value.split(':').map(Number);
+                const hDec = h + (m/60);
+                
+                const sunriseTxt = document.getElementById('sunrise-txt').innerText;
+                const sunsetTxt = document.getElementById('sunset-txt').innerText;
+                
+                if (sunriseTxt === "--:--" || sunsetTxt === "--:--") return;
+
+                const sunrise = SolarEngine.timeToDecimal(sunriseTxt);
+                const sunset = SolarEngine.timeToDecimal(sunsetTxt);
+                
+                const progress = (hDec - sunrise) / (sunset - sunrise);
+                const sunAlt = (hDec >= sunrise && hDec <= sunset) ? Math.sin(progress * Math.PI) * 65 : 0;
+
+                let idealTilt = Math.max(0, Math.min(90, 90 - sunAlt));
+                idealTilt = Math.round(idealTilt / 5) * 5;
+
+                // Aggiorna lo slider e lo stato
+                tiltSlider.value = idealTilt;
+                if(tiltDisplay) tiltDisplay.innerText = idealTilt;
+                state.panelTilt = idealTilt;
+                localStorage.setItem('vibe_panel_tilt', idealTilt);
+
+                if(hintBox) hintBox.style.display = "block";
+                if(optimumVal) optimumVal.innerText = idealTilt;
+                
+                btnAuto.innerText = "COPIATO! ✅";
+                setTimeout(() => { btnAuto.innerText = "AUTO ✨"; }, 1500);
+
+                updateAll();
+            });
+        }
     }
 }
