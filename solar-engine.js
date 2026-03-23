@@ -22,36 +22,42 @@ const SolarEngine = {
      * @param {number} tilt - Inclinazione attuale del pannello (0-90).
      * @param {number} sunAltitude - Altezza attuale del sole in gradi.
      */
-    calculatePower(hDec, sunH, setH, panelWp, cloudCover, tilt = 0, sunAltitude = 0) {
-        if (hDec < sunH || hDec > setH || sunAltitude <= 0) return 0;
-      
-        // 1. LOGICA DI INCIDENZA REALE
-        // L'efficienza massima si ha quando l'angolo di incidenza è 0 (perpendicolare).
-        // Usiamo la differenza tra il tilt attuale e il tilt ottimale.
-        const optimalTilt = this.getOptimalTilt(sunAltitude);
-        const angularDiff = Math.abs(tilt - optimalTilt);
-        
-        // Trasformiamo la differenza angolare in un fattore di perdita (coseno dell'errore)
-        // Più la differenza è alta, meno energia catturiamo.
-        const radDiff = (angularDiff * Math.PI) / 180;
-        let incidenceFactor = Math.cos(radDiff);
-        
-        // Impediamo valori negativi se l'angolo è oltre 90°
-        incidenceFactor = Math.max(0, incidenceFactor);
+calculatePower(hDec, sunH, setH, panelWp, cloudCover, tilt = 0, sunAltitude = null) {
+    // Controllo di sicurezza: se è notte o il sole è sotto l'orizzonte, ritorna 0
+    if (hDec < sunH || hDec > setH || (sunAltitude !== null && sunAltitude <= 0)) {
+        return 0;
+    }
 
-        // 2. FATTORE ATMOSFERICO (Airmass semplificato)
-        // Il sole scalda meno quando è basso perché attraversa più atmosfera.
-        const atmosphereEffect = Math.sin((sunAltitude * Math.PI) / 180);
+    // 1. GESTIONE FALLBACK ALTEZZA SOLE
+    // Se sunAltitude non viene passato, lo stimiamo basandoci sull'ora (curva sinusoidale)
+    let effectiveAltitude = sunAltitude;
+    if (effectiveAltitude === null) {
+        const progress = (hDec - sunH) / (setH - sunH);
+        effectiveAltitude = Math.sin(progress * Math.PI) * 65; // Assumiamo un picco di 65°
+    }
 
-        // 3. METEO E EFFICIENZA HARDWARE
-        const weatherFactor = (100 - (cloudCover * 0.85)) / 100;
-        const systemEfficiency = 0.82; // Perdite standard cavi/mismatch
-        
-        // Calcolo finale: Watt * Incidenza * Atmosfera * Meteo * Efficienza
-        const finalPower = panelWp * incidenceFactor * atmosphereEffect * weatherFactor * systemEfficiency;
-        
-        return Math.max(0, finalPower);
-    },
+    // 2. CALCOLO TILT OTTIMALE E INCIDENZA
+    // Troviamo l'angolo perfetto e calcoliamo quanto siamo distanti con il nostro tilt
+    const optimalTilt = this.getOptimalTilt(effectiveAltitude);
+    const angularDiff = Math.abs(tilt - optimalTilt);
+    const radDiff = (angularDiff * Math.PI) / 180;
+    
+    // Fattore di incidenza: 1.0 se siamo perpendicolari, scende man mano che l'angolo sbaglia
+    let incidenceFactor = Math.max(0, Math.cos(radDiff));
+
+    // 3. EFFETTO ATMOSFERA
+    // Più il sole è alto, meno atmosfera attraversa e più energia arriva (seno dell'altezza)
+    const atmosphereEffect = Math.sin((effectiveAltitude * Math.PI) / 180);
+
+    // 4. PERDITE FISSE E METEO
+    const weatherFactor = (100 - (cloudCover * 0.85)) / 100;
+    const systemEfficiency = 0.82; // Efficienza hardware (cavi, calore, MPPT)
+
+    // Calcolo finale
+    const finalPower = panelWp * incidenceFactor * atmosphereEffect * weatherFactor * systemEfficiency;
+    
+    return Math.max(0, finalPower);
+}
 
     /**
      * Spiegazione delle funzioni aggiunte:
