@@ -131,6 +131,12 @@ async function updateAll(isManualTime = false) {
 
     if (!lat || !lng) return;
 
+    // --- NUOVA AGGIUNTA: Aggiorna il nome della città (PISA, ecc.) ---
+    // Lo facciamo solo se non stiamo già sincronizzando col GPS per evitare conflitti
+    if (!isGpsSyncing) {
+        updateCityName(lat, lng);
+    }
+
     // Se l'ora non è impostata, usa quella attuale
     if (!timeInput.value) {
         const now = new Date();
@@ -139,7 +145,7 @@ async function updateAll(isManualTime = false) {
 
     try {
         const dateStr = dataSelezionata.toISOString().split('T')[0];
-        // Chiamata all'API
+        // Chiamata all'API meteo
         state.weatherData = await WeatherAPI.fetchForecast(lat, lng, dateStr, !isManualTime);
         
         if (!state.weatherData || !state.weatherData.hourly) {
@@ -154,7 +160,7 @@ async function updateAll(isManualTime = false) {
         const hourly = state.weatherData.hourly;
         const daily = state.weatherData.daily;
 
-        // Recupero nubi con protezione (se undefined mette 0)
+        // Recupero nubi
         const cloudCover = (hourly.cloud_cover && hourly.cloud_cover[hourIdx] !== undefined) 
                            ? hourly.cloud_cover[hourIdx] 
                            : 0;
@@ -174,11 +180,11 @@ async function updateAll(isManualTime = false) {
         const sunH = SolarEngine.timeToDecimal(sunrise);
         const setH = SolarEngine.timeToDecimal(sunset);
 
-        // Calcolo altezza sole per il grafico e la dashboard
+        // Calcolo altezza sole
         const progress = (hDec - sunH) / (setH - sunH);
         const sunAltitude = (hDec >= sunH && hDec <= setH) ? Math.sin(progress * Math.PI) * 65 : 0;
 
-        // CALCOLO POTENZA (Assicurati che state.panelWp e state.panelPsWp siano > 0 nel Garage)
+        // CALCOLO POTENZA
         const pServ = SolarEngine.calculatePower(hDec, sunH, setH, state.panelWp, cloudCover, state.panelTilt, sunAltitude);
         const pPS = SolarEngine.calculatePower(hDec, sunH, setH, state.panelPsWp, cloudCover, state.panelTilt, sunAltitude);
         
@@ -397,6 +403,7 @@ function switchView(vId, el) {
 }
 
 function initSliders() {
+    // 1. Configurazione slider Batterie
     [{ id: 'ps-soc-slider', valId: 'ps-soc-val', stateKey: 'currentPsSOC' }, 
      { id: 'soc-slider', valId: 'soc-val', stateKey: 'currentSOC' }].forEach(s => {
         const el = document.getElementById(s.id);
@@ -410,11 +417,15 @@ function initSliders() {
             el.style.setProperty('--value', el.value + '%');
         }
     });
+
+    // 2. Gestione Manuale Tilt
     const tiltSlider = document.getElementById('tilt-slider');
     const tiltDisplay = document.getElementById('tilt-val');
+    
     if (tiltSlider) {
         tiltSlider.value = state.panelTilt || 0;
         if(tiltDisplay) tiltDisplay.innerText = state.panelTilt || 0;
+        
         tiltSlider.addEventListener('input', (e) => {
             const val = e.target.value;
             if(tiltDisplay) tiltDisplay.innerText = val;
@@ -422,5 +433,48 @@ function initSliders() {
             localStorage.setItem('vibe_panel_tilt', val);
             updateAll(); 
         });
+
+        // --- 3. LOGICA AUTO-TILT (Inserita qui dentro) ---
+        const btnAuto = document.getElementById('btn-auto-tilt');
+        const hintBox = document.getElementById('tilt-hint');
+        const optimumVal = document.getElementById('optimum-tilt-val');
+
+        if (btnAuto) {
+            btnAuto.addEventListener('click', () => {
+                const timeInput = document.getElementById('input-time');
+                if (!timeInput.value) return;
+
+                const [h, m] = timeInput.value.split(':').map(Number);
+                const hDec = h + (m/60);
+                
+                const sunriseTxt = document.getElementById('sunrise-txt').innerText;
+                const sunsetTxt = document.getElementById('sunset-txt').innerText;
+                
+                if (sunriseTxt === "--:--" || sunsetTxt === "--:--") return;
+
+                const sunrise = SolarEngine.timeToDecimal(sunriseTxt);
+                const sunset = SolarEngine.timeToDecimal(sunsetTxt);
+                
+                const progress = (hDec - sunrise) / (sunset - sunrise);
+                const sunAlt = (hDec >= sunrise && hDec <= sunset) ? Math.sin(progress * Math.PI) * 65 : 0;
+
+                let idealTilt = Math.max(0, Math.min(90, 90 - sunAlt));
+                idealTilt = Math.round(idealTilt / 5) * 5;
+
+                // Aggiorna lo slider e lo stato
+                tiltSlider.value = idealTilt;
+                if(tiltDisplay) tiltDisplay.innerText = idealTilt;
+                state.panelTilt = idealTilt;
+                localStorage.setItem('vibe_panel_tilt', idealTilt);
+
+                if(hintBox) hintBox.style.display = "block";
+                if(optimumVal) optimumVal.innerText = idealTilt;
+                
+                btnAuto.innerText = "COPIATO! ✅";
+                setTimeout(() => { btnAuto.innerText = "AUTO ✨"; }, 1500);
+
+                updateAll();
+            });
+        }
     }
 }
