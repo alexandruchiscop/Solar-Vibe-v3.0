@@ -1,7 +1,6 @@
 /**
- * APP.JS - Versione Ripristinata (Search + GPS)
+ * APP.JS - Versione Ripristinata (Search + GPS + Auto-Tilt)
  */
-let chartSelectionTimer;
 let dataSelezionata = new Date(); 
 let isGpsSyncing = false; 
 
@@ -38,21 +37,25 @@ window.onload = () => {
         handleGpsSync(); 
     } else {
         updateAll();
+        // Recupera il nome città se ci sono già coordinate caricate
+        const lngVal = document.getElementById('input-lng').value;
+        updateCityName(latVal, lngVal);
     }
 };
 
 function initEventListeners() {
+    // Navigazione
     document.querySelectorAll('.nav-item').forEach(item => {
         item.addEventListener('click', () => switchView(item.dataset.view, item));
     });
     
+    // GPS
     const gpsBtn = document.getElementById('btn-gps');
     if (gpsBtn) gpsBtn.addEventListener('click', handleGpsSync);
 
+    // Input Tempo e Data
     const timeInput = document.getElementById('input-time');
-    if (timeInput) {
-        timeInput.addEventListener('input', () => updateAll(true)); 
-    }
+    if (timeInput) timeInput.addEventListener('input', () => updateAll(true)); 
 
     const dateInput = document.getElementById('input-date');
     if (dateInput) {
@@ -63,7 +66,7 @@ function initEventListeners() {
         });
     }
 
-    // --- GESTIONE INPUT CITTÀ ---
+    // Ricerca Città (Invio)
     const cityInput = document.getElementById('city-input');
     if (cityInput) {
         cityInput.addEventListener('keypress', (e) => {
@@ -74,23 +77,25 @@ function initEventListeners() {
         });
     }
 
-    // Quando cambi Lat/Lng a mano dai piccoli box
+    // Modifica manuale coordinate
     ['input-lat', 'input-lng'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
             el.addEventListener('change', () => {
                 const lat = document.getElementById('input-lat').value;
                 const lng = document.getElementById('input-lng').value;
-                updateCityName(lat, lng); // Aggiorna il nome città basandosi sui nuovi numeri
+                updateCityName(lat, lng); 
                 updateAll(false);
             });
         }
     });
 
-    // Bottone salvataggio Garage
+    // Salvataggio Garage
     const saveBtn = document.getElementById('btn-save-name');
     if (saveBtn) saveBtn.addEventListener('click', saveGarageSettings);
 }
+
+// --- LOGICA POSIZIONE E CITTÀ ---
 
 async function handleGpsSync() {
     isGpsSyncing = true;
@@ -108,9 +113,7 @@ async function handleGpsSync() {
         if (latInput) latInput.value = coords.latitude.toFixed(4);
         if (lngInput) lngInput.value = coords.longitude.toFixed(4);
 
-        // Trova il nome della città dalle coordinate GPS
         await updateCityName(coords.latitude, coords.longitude);
-        
         updateAll(false); 
 
         if (btn) {
@@ -131,7 +134,6 @@ async function handleGpsSync() {
     }
 }
 
-// CERCA COORDINATE PARTENDO DAL TESTO (es: "MILANO")
 async function searchCityCoords(query) {
     if (!query || query.length < 3) return;
     try {
@@ -140,8 +142,7 @@ async function searchCityCoords(query) {
         if (data && data.length > 0) {
             document.getElementById('input-lat').value = parseFloat(data[0].lat).toFixed(4);
             document.getElementById('input-lng').value = parseFloat(data[0].lon).toFixed(4);
-            
-            // Dopo aver trovato le coordinate, aggiorna il meteo
+            updateCityName(data[0].lat, data[0].lon);
             updateAll(false); 
         } else {
             alert("Città non trovata");
@@ -149,34 +150,36 @@ async function searchCityCoords(query) {
     } catch (e) { console.error("Errore ricerca città:", e); }
 }
 
-// SCRIVE IL NOME DELLA CITTÀ PARTENDO DALLE COORDINATE
 async function updateCityName(lat, lng) {
     if (!lat || !lng) return;
     try {
         const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=it`);
         const data = await response.json();
-        const city = data.address.city || data.address.town || data.address.village || data.address.county || "";
+        const city = data.address.city || data.address.town || data.address.village || data.address.county || "SCONOSCIUTA";
         const cityUpper = city.toUpperCase();
 
-        // Aggiorna l'input in basso
         const cityInput = document.getElementById('city-input');
         if (cityInput) cityInput.value = cityUpper;
         
-        // Aggiorna il titolo principale (CAMPER - CITTÀ)
+        const locDisplay = document.getElementById('location-display'); 
+        if (locDisplay) locDisplay.innerText = cityUpper;
+
         const mainDisplay = document.getElementById('camper-name-display');
         if (mainDisplay) {
             const baseName = state.camperName || "IL MIO CAMPER";
             mainDisplay.innerText = `${baseName.toUpperCase()} - ${cityUpper}`;
         }
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("Errore nome città:", e); }
 }
+
+// --- LOGICA CALCOLI E UI ---
 
 async function updateAll(isManualTime = false) {
     const lat = document.getElementById('input-lat').value;
     const lng = document.getElementById('input-lng').value;
     const timeInput = document.getElementById('input-time');
 
-    if (!lat || !lng) return;
+    if (!lat || !lng || !timeInput.value) return;
 
     try {
         const dateStr = dataSelezionata.toISOString().split('T')[0];
@@ -216,17 +219,16 @@ async function updateAll(isManualTime = false) {
         if (document.getElementById('w_ps')) document.getElementById('w_ps').innerText = Math.round(pPS) + " W";
 
         updateSunUI(hDec, sunH, setH);
-        updateReportUI(pServ + pPS, sunH, setH);
+        updateReportUI(pServ, pPS, sunH, setH);
 
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("Errore updateAll:", e); }
 }
 
+function updateReportUI(wServ, wPS, sunH, setH) {
     const chart = document.getElementById('hourly-chart');
     const totalDisplay = document.getElementById('total-wh-day');
     if (!chart || !state.weatherData) return;
 
-    const wServ = parseFloat(document.getElementById('w_services')?.innerText) || 0;
-    const wPS = parseFloat(document.getElementById('w_ps')?.innerText) || 0;
     const psAhEquiv = state.psAh / 12.8; 
 
     const safeSet = (id, val) => {
@@ -237,6 +239,7 @@ async function updateAll(isManualTime = false) {
     safeSet('batt_charge_80_txt', SolarEngine.estimateChargeTime(state.currentSOC, 80, wServ, state.battAh));
     safeSet('batt_charge_90_txt', SolarEngine.estimateChargeTime(state.currentSOC, 90, wServ, state.battAh));
     safeSet('batt_charge_100_txt', SolarEngine.estimateChargeTime(state.currentSOC, 100, wServ, state.battAh));
+    
     safeSet('ps_charge_80_txt', SolarEngine.estimateChargeTime(state.currentPsSOC, 80, wPS, psAhEquiv));
     safeSet('ps_charge_90_txt', SolarEngine.estimateChargeTime(state.currentPsSOC, 90, wPS, psAhEquiv));
     safeSet('ps_charge_100_txt', SolarEngine.estimateChargeTime(state.currentPsSOC, 100, wPS, psAhEquiv));
@@ -246,11 +249,9 @@ async function updateAll(isManualTime = false) {
     const startH = Math.floor(sunH);
     const endH = Math.ceil(setH);
 
-    for (let h = startH; h <= endH; h++) {
-        const hProgress = (h - sunH) / (setH - sunH);
-        const hAltitude = Math.max(0, Math.sin(hProgress * Math.PI) * 65);
+    for (let h = 0; h < 24; h++) {
         const cloud = state.weatherData.hourly.cloud_cover[h] || 0;
-        const hP = SolarEngine.calculatePower(h, sunH, setH, state.panelWp + state.panelPsWp, cloud, state.panelTilt, hAltitude);
+        const hP = SolarEngine.calculatePower(h, sunH, setH, state.panelWp + state.panelPsWp, cloud, state.panelTilt);
         dailyTotal += hP;
 
         const bar = document.createElement('div');
@@ -261,27 +262,34 @@ async function updateAll(isManualTime = false) {
         const timeInput = document.getElementById('input-time');
         if (timeInput && timeInput.value) {
             const currentH = parseInt(timeInput.value.split(':')[0]);
-            if (h === currentH) bar.style.background = "var(--accento, #fbbf24)";
+            if (h === currentH) bar.style.background = "var(--accento)";
         }
 
         bar.onclick = () => {
             const detail = document.getElementById('detail-display');
-            if (detail) detail.innerHTML = `<span style="color:#fbbf24;">ORE ${h}:00 → ${Math.round(hP)} W</span>`;
+            if (detail) detail.innerHTML = `<span style="color:var(--accento);">ORE ${h}:00 → ${Math.round(hP)} W</span>`;
         };
         chart.appendChild(bar);
     }
     if (totalDisplay) totalDisplay.innerText = Math.round(dailyTotal) + " Wh";
 }
 
+// --- GESTIONE GARAGE E IMPOSTAZIONI ---
+
 function saveGarageSettings() {
     const name = document.getElementById('camper_name_input').value.trim();
+    state.camperName = name;
     localStorage.setItem('vibe_camper_name', name);
     localStorage.setItem('vibe_batt_ah', state.battAh);
     localStorage.setItem('vibe_panel_wp', state.panelWp);
     localStorage.setItem('vibe_ps_ah', state.psAh);
     localStorage.setItem('vibe_panel_ps_wp', state.panelPsWp);
-    const display = document.getElementById('camper-name-display');
-    if (display && name) display.innerText = name.toUpperCase();
+    
+    // Forza aggiornamento titolo con città
+    const lat = document.getElementById('input-lat').value;
+    const lng = document.getElementById('input-lng').value;
+    updateCityName(lat, lng);
+
     const btn = document.getElementById('btn-save-name');
     if (btn) {
         btn.style.background = "#16a34a";
@@ -293,7 +301,6 @@ function loadSavedData() {
     const savedName = localStorage.getItem('vibe_camper_name');
     if (savedName) {
         state.camperName = savedName;
-        document.getElementById('camper-name-display').innerText = savedName.toUpperCase();
         document.getElementById('camper_name_input').value = savedName;
     }
     document.getElementById('batt_val').innerText = state.battAh;
@@ -321,13 +328,15 @@ function editSpec(type) {
 }
 
 function updateConversions() {
-    const bAh = parseFloat(document.getElementById('batt_val').innerText) || 0;
+    const bAh = state.battAh;
     const bConvVal = document.getElementById('batt_conv_val');
     if (bConvVal) bConvVal.innerText = Math.round(bAh * 12.8);
-    const pWh = parseFloat(document.getElementById('ps_val').innerText) || 0;
+    const pWh = state.psAh;
     const pConvVal = document.getElementById('ps_conv_val');
     if (pConvVal) pConvVal.innerText = Math.round(pWh / 12.8);
 }
+
+// --- UTILITY UI ---
 
 function generaBottoniGiorni() {
     const container = document.getElementById('days-selector');
@@ -350,37 +359,6 @@ function aggiornaTuttaInterfaccia(isManual = true) {
     if (inputDate) inputDate.value = dataSelezionata.toISOString().split('T')[0];
     generaBottoniGiorni();
     updateAll(isManual);
-}
-
-async function updateCityName(lat, lng) {
-    if (!lat || !lng) return;
-    try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=it`);
-        const data = await response.json();
-        
-        // Recupera il nome (città, comune o villaggio)
-        const city = data.address.city || data.address.town || data.address.village || data.address.county || "Posizione Sconosciuta";
-        const cityUpper = city.toUpperCase();
-
-        // Aggiorna l'input di ricerca città
-        const cityInput = document.getElementById('city-input');
-        if (cityInput) cityInput.value = cityUpper;
-
-        // Aggiorna il display in basso (dove c'è scritto PISA nell'allegato)
-        // Assicurati che nel tuo HTML l'id sia 'location-display' o quello che usavi
-        const locDisplay = document.getElementById('location-display'); 
-        if (locDisplay) {
-            locDisplay.innerText = cityUpper;
-        }
-
-        // Se vuoi che appaia anche nel titolo principale insieme al nome camper:
-        const mainDisplay = document.getElementById('camper-name-display');
-        if (mainDisplay && state.camperName) {
-            mainDisplay.innerText = `${state.camperName.toUpperCase()} - ${cityUpper}`;
-        }
-    } catch (e) {
-        console.error("Errore nel recupero del nome città:", e);
-    }
 }
 
 function setupStars() {
@@ -431,36 +409,31 @@ function switchView(vId, el) {
 }
 
 function initSliders() {
-    // 1. Configurazione slider Batterie (SOC e PS SOC)
+    // 1. Slider Batterie
     [{ id: 'ps-soc-slider', valId: 'ps-soc-val', stateKey: 'currentPsSOC' }, 
      { id: 'soc-slider', valId: 'soc-val', stateKey: 'currentSOC' }].forEach(s => {
         const el = document.getElementById(s.id);
         if (el) {
-            // Sincronizzazione iniziale del riempimento
             el.style.setProperty('--value', el.value + '%');
-            
             el.addEventListener('input', (e) => {
                 const val = e.target.value;
                 state[s.stateKey] = val;
                 document.getElementById(s.valId).innerText = val + "%";
-                el.style.setProperty('--value', val + '%'); // Gestisce il fill CSS
+                el.style.setProperty('--value', val + '%');
                 updateAll();
             });
         }
     });
 
-    // 2. Gestione Manuale Tilt con Filling Bar
+    // 2. Slider TILT
     const tiltSlider = document.getElementById('tilt-slider');
     const tiltDisplay = document.getElementById('tilt-val');
-    
-    // Funzione per aggiornare il riempimento della barra (background-size)
     const updateTiltVisual = (val) => {
         const percent = (val / 90) * 100;
         tiltSlider.style.backgroundSize = percent + '% 100%';
     };
 
     if (tiltSlider) {
-        // Ripristino valori iniziali
         const savedTilt = state.panelTilt || 0;
         tiltSlider.value = savedTilt;
         if(tiltDisplay) tiltDisplay.innerText = savedTilt;
@@ -471,12 +444,11 @@ function initSliders() {
             if(tiltDisplay) tiltDisplay.innerText = val;
             state.panelTilt = parseInt(val);
             localStorage.setItem('vibe_panel_tilt', val);
-            
-            updateTiltVisual(val); // Aggiorna il riempimento mentre trascini
+            updateTiltVisual(val);
             updateAll(); 
         });
 
-        // --- 3. LOGICA AUTO-TILT (Recuperata integralmente) ---
+        // AUTO-TILT
         const btnAuto = document.getElementById('btn-auto-tilt');
         const hintBox = document.getElementById('tilt-hint');
         const optimumVal = document.getElementById('optimum-tilt-val');
@@ -484,95 +456,31 @@ function initSliders() {
         if (btnAuto) {
             btnAuto.addEventListener('click', () => {
                 const timeInput = document.getElementById('input-time');
-                if (!timeInput.value) return;
+                if (!timeInput.value || !state.weatherData) return;
 
                 const [h, m] = timeInput.value.split(':').map(Number);
                 const hDec = h + (m/60);
-                
-                const sunriseTxt = document.getElementById('sunrise-txt').innerText;
-                const sunsetTxt = document.getElementById('sunset-txt').innerText;
-                
-                if (sunriseTxt === "--:--" || sunsetTxt === "--:--") return;
+                const sunrise = SolarEngine.timeToDecimal(document.getElementById('sunrise-txt').innerText);
+                const sunset = SolarEngine.timeToDecimal(document.getElementById('sunset-txt').innerText);
 
-                const sunrise = SolarEngine.timeToDecimal(sunriseTxt);
-                const sunset = SolarEngine.timeToDecimal(sunsetTxt);
-                
-                // Calcolo matematico originale per l'inclinazione perfetta
                 const progress = (hDec - sunrise) / (sunset - sunrise);
                 const sunAlt = (hDec >= sunrise && hDec <= sunset) ? Math.sin(progress * Math.PI) * 65 : 0;
-
-                // L'angolo del pannello deve essere il complementare dell'altezza del sole
                 let idealTilt = Math.max(0, Math.min(90, 90 - sunAlt));
-                idealTilt = Math.round(idealTilt / 5) * 5; // Arrotondamento a step di 5 gradi
+                idealTilt = Math.round(idealTilt / 5) * 5;
 
-                // Aggiornamento UI e Stato
                 tiltSlider.value = idealTilt;
                 if(tiltDisplay) tiltDisplay.innerText = idealTilt;
                 state.panelTilt = idealTilt;
                 localStorage.setItem('vibe_panel_tilt', idealTilt);
-                
-                // Aggiorna anche il riempimento visivo colorato
                 updateTiltVisual(idealTilt);
 
                 if(hintBox) hintBox.style.display = "block";
                 if(optimumVal) optimumVal.innerText = idealTilt;
                 
-                // Feedback utente
                 btnAuto.innerText = "COPIATO! ✅";
                 setTimeout(() => { btnAuto.innerText = "AUTO ✨"; }, 1500);
-
                 updateAll();
             });
         }
     }
-}
-
-// 1. FUNZIONE PER CERCARE QUANDO SCRIVI TU
-async function searchCityCoords(query) {
-    if (!query || query.length < 3) return;
-    try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
-        const data = await response.json();
-        if (data && data.length > 0) {
-            // Aggiorna input lat/lng con i nuovi dati
-            document.getElementById('input-lat').value = parseFloat(data[0].lat).toFixed(4);
-            document.getElementById('input-lng').value = parseFloat(data[0].lon).toFixed(4);
-            
-            // Richiama l'aggiornamento totale della dashboard
-            if (typeof updateAll === 'function') updateAll(false); 
-        }
-    } catch (e) { console.error("Errore ricerca:", e); }
-}
-
-// 2. FUNZIONE PER MOSTRARE LA CITTÀ (DA GPS) SENZA BLOCCARE L'INPUT
-async function updateCityName(lat, lng) {
-    if (!lat || !lng) return;
-    try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=it`);
-        const data = await response.json();
-        const city = data.address.city || data.address.town || data.address.village || data.address.county || "";
-        
-        const cityInput = document.getElementById('city-input');
-        if (cityInput) {
-            cityInput.value = city.toUpperCase(); // Scrive la città trovata
-        }
-        
-        // Aggiorna il titolo in alto (IL MIO CAMPER - PISA)
-        const mainDisplay = document.getElementById('camper-name-display');
-        if (mainDisplay) {
-            const baseName = state.camperName || "IL MIO CAMPER";
-            mainDisplay.innerText = `${baseName.toUpperCase()} - ${city.toUpperCase()}`;
-        }
-    } catch (e) { console.error(e); }
-}
-
-// 3. AGGIUNGI L'EVENTO "INVIO" (da mettere dentro window.onload o initEventListeners)
-const cityInput = document.getElementById('city-input');
-if (cityInput) {
-    cityInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            searchCityCoords(cityInput.value.trim());
-            cityInput.blur(); // Rimuove il cursore dopo l'invio
-        }
-    });
 }
