@@ -63,23 +63,30 @@ function initEventListeners() {
         });
     }
 
+  // Quando l'utente preme INVIO nel box città
     const cityInput = document.getElementById('city-input');
     if (cityInput) {
-        cityInput.addEventListener('change', function () {
-            const query = this.value.trim();
-            if (query.length >= 3) searchCityCoords(query);
+        cityInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') searchCityCoords(cityInput.value.trim());
         });
+        // Opzionale: aggiorna anche quando esce dal campo
+        cityInput.addEventListener('blur', () => searchCityCoords(cityInput.value.trim()));
     }
 
+    // Quando l'utente cambia a mano Latitudine o Longitudine
     ['input-lat', 'input-lng'].forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.addEventListener('change', () => updateAll(false));
+        if (el) {
+            el.addEventListener('change', () => {
+                // Se cambio i numeri, devo aggiornare il NOME della città nel box
+                const lat = document.getElementById('input-lat').value;
+                const lng = document.getElementById('input-lng').value;
+                updateCityName(lat, lng); 
+                updateAll(false);
+            });
+        }
     });
-
-    const saveNameBtn = document.getElementById('btn-save-name');
-    if (saveNameBtn) saveNameBtn.onclick = saveGarageSettings;
 }
-
 async function handleGpsSync() {
     isGpsSyncing = true;
     const btn = document.getElementById('btn-gps');
@@ -497,27 +504,21 @@ function initSliders() {
     }
 }
 
-/**
- * Cerca le coordinate partendo dal testo inserito dall'utente (es. "Milano")
- */
 async function searchCityCoords(query) {
+    if (!query || query.length < 3) return;
     try {
         const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
         const data = await response.json();
 
         if (data && data.length > 0) {
-            const latInput = document.getElementById('input-lat');
-            const lngInput = document.getElementById('input-lng');
+            // Aggiorna i campi numerici
+            document.getElementById('input-lat').value = parseFloat(data[0].lat).toFixed(4);
+            document.getElementById('input-lng').value = parseFloat(data[0].lon).toFixed(4);
 
-            if (latInput) latInput.value = parseFloat(data[0].lat).toFixed(4);
-            if (lngInput) lngInput.value = parseFloat(data[0].lon).toFixed(4);
-
-            // Una volta trovate le coordinate, aggiorniamo tutto il sistema
-            updateAll(false);
-        } else {
-            console.warn("Città non trovata");
+            // AGGIORNA TUTTO (Meteo, Sole, Grafici)
+            updateAll(false); 
         }
     } catch (e) {
-        console.error("Errore durante la ricerca città:", e);
+        console.error("Errore ricerca città:", e);
     }
 }
