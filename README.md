@@ -1,3 +1,1 @@
-# Solar-Vibe - v3.0
-
-⚙️ Work in Progress ⚙️
+# Vibe-Solar-v3.1
